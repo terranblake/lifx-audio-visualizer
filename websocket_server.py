@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python3
 import json
 from collections import defaultdict
 from typing import Dict, Union
@@ -44,19 +44,21 @@ class WSServer:
             else:
                 await self.log(f'Changing color to {color}')
                 self.current_color = color
-                self.lifx.safe_change_light_color(color)
+                self.lifx.change_color(color)
 
     async def handler(self, websocket, path):
-        print(f'Received connection')
+        await self.log(f'Received connection')
         self.clients.append(websocket)
+        try:
+            async for message in websocket:
+                self.client_message_counts[websocket] += 1
+                response = await self.handle_message(message)
+                if response is not None:
+                    websocket.send(json.dumps(response))
+        except Exception as e:
+            print(e)
 
-        async for message in websocket:
-            self.client_message_counts[websocket] += 1
-            response = await self.handle_message(message)
-            if response is not None:
-                websocket.send(json.dumps(response))
-
-        print(f'Client disconnected')
+        await self.log(f'Client disconnected')
         self.clients.remove(websocket)
 
 

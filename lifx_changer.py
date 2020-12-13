@@ -34,6 +34,20 @@ class LifxLightChanger:
 
         self.log(f'Converted {len(devices)} lights to MultiZoneLights')
 
+    def change_color(self, color: Tuple[int, int, int, int], safe=False):
+        """
+
+        :param color:
+        :param safe: If safe is true, will call self.safe_change_light_color,
+        which will guarantee the color change occurs
+        :return:
+        """
+        for device in self.devices:
+            if safe:
+                self.safe_change_light_color(color)
+            else:
+                device.set_color(color, rapid=True)
+
     def safe_change_light_color(self, color: Tuple[int, int, int, int]):
         for device in self.devices:
             while True:
