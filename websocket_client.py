@@ -40,7 +40,7 @@ class WSClient:
         last_color = None
         while True:
             try:
-                self.mode_functions[self.mode](stream)
+                await self.mode_functions[self.mode](stream)
                 break
             except websockets.ConnectionClosedError:
                 print('Lost connection to server, attempting to reconnect')
@@ -68,7 +68,7 @@ class WSClient:
             else:
                 command['color'] = lifxlan.RED
             if command['color'] != last_color:
-                await self.websocket.send(command)
+                await self.websocket.send(json.dumps(command))
                 last_color = command['color']
 
     async def mode_gradient(self, stream: pyaudio.Stream):
@@ -84,7 +84,7 @@ class WSClient:
             #     'command': 'set_gradient_levels',
             #     'gradient': .5  # Gradient should be between 0 and 1
             # }
-            # await self.websocket.send(command)
+            # await self.websocket.send(json.dumps(command))
             pass
 
 
