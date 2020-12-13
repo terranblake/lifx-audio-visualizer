@@ -1,11 +1,11 @@
 
 import json
 from collections import defaultdict
-from typing import Optional
+from typing import Dict, Union
 import asyncio
 import websockets
 
-from .lifx_changer import LifxLightChanger
+from lifx_audio_visualizer.lifx_changer import LifxLightChanger
 
 
 class WSServer:
@@ -16,6 +16,8 @@ class WSServer:
         self.clients = []
         self.client_message_counts = defaultdict(int)
 
+        self.current_color = None
+
         self.verbose = verbose
 
     async def log(self, msg: str):
@@ -23,21 +25,26 @@ class WSServer:
             print(f'WSServer: {msg}')
 
     def start(self, ip='127.0.0.1', port=8080):
-        await self.log('Initializing connection to lights')
+        print('Initializing connection to lights')
         self.lifx.initialize()
 
         # Set IP to 0.0.0.0 if you want clients from separate devices to be able to connect
+        print(f'Listening at {ip}:{port}')
         self.server = websockets.serve(self.handler, ip, port)
         asyncio.get_event_loop().run_until_complete(self.server)
         asyncio.get_event_loop().run_forever()
 
-    async def handle_message(self, message: str) -> Optional[Dict]:
+    async def handle_message(self, message: str) -> Union[None, Dict]:
         message = json.loads(message)
         command = message['command']
         if command == 'change_color':
             color = message['color']
-            await self.log(f'Changing color to {color}')
-            self.lifx.safe_change_light_color(color)
+            if self.current_color == color:
+                await self.log('Received request for same as current color')
+            else:
+                await self.log(f'Changing color to {color}')
+                self.current_color = color
+                self.lifx.safe_change_light_color(color)
 
     async def handler(self, websocket, path):
         print(f'Received connection')
