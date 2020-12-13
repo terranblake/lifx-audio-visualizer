@@ -46,9 +46,12 @@ class WSServer:
                 self.current_color = color
                 self.lifx.change_color(color)
         elif command == 'set_gradient_colors':
-            self.lifx.set_gradient_colors(message['colors'])
+            colors = message['colors']
+            await self.log(f'Set gradient colors to {colors}')
+            self.lifx.set_gradient_colors(colors)
         elif command == 'set_gradient_levels':
             gradient_percentage = message['gradient']
+            await self.log(f'Setting gradient level to {gradient_percentage}')
             self.lifx.set_gradient_value(gradient_percentage, safe=False)
 
     async def handler(self, websocket, path):
