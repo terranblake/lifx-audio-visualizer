@@ -45,6 +45,11 @@ class WSServer:
                 await self.log(f'Changing color to {color}')
                 self.current_color = color
                 self.lifx.change_color(color)
+        elif command == 'set_gradient_colors':
+            self.lifx.set_gradient_colors(message['colors'])
+        elif command == 'set_gradient_levels':
+            gradient_percentage = message['gradient']
+            self.lifx.set_gradient_value(gradient_percentage, safe=False)
 
     async def handler(self, websocket, path):
         await self.log(f'Received connection')

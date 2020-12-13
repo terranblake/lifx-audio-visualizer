@@ -1,5 +1,5 @@
 
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import lifxlan
 
 
@@ -9,6 +9,11 @@ class LifxLightChanger:
         self.lifx = lifxlan.LifxLAN()
         self.verbose = verbose
         self.devices: List[lifxlan.MultiZoneLight] = []
+        self.device_color_zone_counts: Dict[lifxlan.MultiZoneLight, int] = {}
+
+        # Messing with gradients based on moving average of volume
+        self.current_gradient_colors = []
+        self.current_gradient_value = 0
 
     def log(self, msg: str):
         if self.verbose:
@@ -34,6 +39,23 @@ class LifxLightChanger:
 
         self.log(f'Converted {len(devices)} lights to MultiZoneLights')
 
+        # Get count of color zones
+        self.log('Getting color zones')
+        for device in self.devices:
+            self.device_color_zone_counts[device] = len(self.get_color_zones(device, safe=True))
+
+    @staticmethod
+    def get_color_zones(device: lifxlan.MultiZoneLight, start=None, end=None, safe=True):
+        if safe:
+            while True:
+                try:
+                    zones = device.get_color_zones(start=start, end=end)
+                    return zones
+                except lifxlan.WorkflowException:
+                    pass
+        else:
+            return device.get_color_zones(start=start, end=end)
+
     def change_color(self, color: Tuple[int, int, int, int], safe=False):
         """
 
@@ -57,10 +79,17 @@ class LifxLightChanger:
                 except lifxlan.WorkflowException:
                     pass
 
-    def change_to_red(self):
-        # Dummy function for testing client/server
-        self.safe_change_light_color(lifxlan.RED)
+    def set_gradient_colors(self, colors: List[Tuple]):
+        self.current_gradient_colors = colors
 
-    def change_to_blue(self):
-        # Dummy function for testing client/server
-        self.safe_change_light_color(lifxlan.BLUE)
+    def set_gradient_value(self, gradient_value: float, safe=False):
+        # gradient_value should be a value from 0 to 1
+        for device in self.devices:
+            number_of_color_zones = self.device_color_zone_counts[device]
+            color_zones = []
+            for i in range(number_of_color_zones):
+                if i / number_of_color_zones < gradient_value:
+                    color_zones.append(self.current_gradient_colors[0])
+                else:
+                    color_zones.append(self.current_gradient_colors[1])
+            device.set_zone_colors(color_zones, rapid=not safe)
