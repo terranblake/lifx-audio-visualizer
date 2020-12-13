@@ -93,3 +93,15 @@ class LifxLightChanger:
                 else:
                     color_zones.append(self.current_gradient_colors[1])
             device.set_zone_colors(color_zones, rapid=not safe)
+
+    def set_color_zones(self, zones_values: list, safe=False):
+        # gradient_value should be a value from 0 to 1
+        off = [0, 0, 0, 0]
+        for device in self.devices:
+            color_zones = []
+            for x in zones_values:
+                if x == 0:
+                    color_zones.append(off)
+                else:
+                    color_zones.append(lifxlan.RED)
+            device.set_zone_colors(color_zones, rapid=not safe)

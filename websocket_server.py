@@ -37,7 +37,6 @@ class WSServer:
     async def handle_message(self, message: str) -> Union[None, Dict]:
         message = json.loads(message)
         command = message['command']
-        print(message)
         if command == 'change_color':
             color = message['color']
             if self.current_color == color:
@@ -54,13 +53,16 @@ class WSServer:
             gradient_percentage = message['gradient']
             await self.log(f'Setting gradient level to {gradient_percentage}')
             self.lifx.set_gradient_value(gradient_percentage, safe=False)
+        elif command == 'set_color_zones':
+            zones_values = message['zones_values']
+            await self.log(f'Setting color zones values')
+            self.lifx.set_color_zones(zones_values, safe=False)
 
     async def handler(self, websocket, path):
         await self.log(f'Received connection')
         self.clients.append(websocket)
         try:
             async for message in websocket:
-                print(message)
                 self.client_message_counts[websocket] += 1
                 response = await self.handle_message(message)
                 if response is not None:
