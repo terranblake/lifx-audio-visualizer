@@ -37,6 +37,7 @@ class WSServer:
     async def handle_message(self, message: str) -> Union[None, Dict]:
         message = json.loads(message)
         command = message['command']
+        print(message)
         if command == 'change_color':
             color = message['color']
             if self.current_color == color:
@@ -59,6 +60,7 @@ class WSServer:
         self.clients.append(websocket)
         try:
             async for message in websocket:
+                print(message)
                 self.client_message_counts[websocket] += 1
                 response = await self.handle_message(message)
                 if response is not None:

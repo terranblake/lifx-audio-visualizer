@@ -5,6 +5,7 @@ import lifxlan
 import numpy as np
 import websockets
 import pyaudio
+from visualizer import MicrophoneVisualizer
 
 
 class WSClient:
@@ -19,6 +20,13 @@ class WSClient:
             'static': self.mode_static,
             'gradient': self.mode_gradient,
         }
+        self.visualizer = MicrophoneVisualizer(
+            window_length = 50,
+            num_beams = 8,
+            num_zones_per_beam = 10,
+            num_corner_pieces = 1,
+            center_zone_offset = 50,
+        )
 
     def start(self):
         asyncio.get_event_loop().run_until_complete(self.connect_and_run())
@@ -73,21 +81,25 @@ class WSClient:
 
     async def mode_gradient(self, stream: pyaudio.Stream):
         # Set gradient colors
-        await self.websocket.send({
+        await self.websocket.send(json.dumps({
             'command': 'set_gradient_colors',
             'colors': [lifxlan.RED, lifxlan.YELLOW]  # Currently supports exactly 2 colors
-        })
+        }))
         while True:
+            data = np.frombuffer(stream.read(self.chunk_size), dtype=np.int16)
+            self.visualizer.on_data(data)
+
             # Terran: Put your code here, and decide when to send a gradient update
             # Command looks like this:
-            # command = {
-            #     'command': 'set_gradient_levels',
-            #     'gradient': .5  # Gradient should be between 0 and 1
-            # }
-            # await self.websocket.send(json.dumps(command))
-            pass
+            gradient = self.visualizer.beam_volume
+            command = {
+                'command': 'set_gradient_levels',
+                'gradient': gradient  # Gradient should be between 0 and 1
+            }
+            print(command)
+            await self.websocket.send(json.dumps(command))
 
 
 if __name__ == '__main__':
-    ws_client = WSClient()
+    ws_client = WSClient(mode = 'gradient')
     ws_client.start()
