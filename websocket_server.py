@@ -5,7 +5,7 @@ from typing import Dict, Union
 import asyncio
 import websockets
 
-from lifx_audio_visualizer.lifx_changer import LifxLightChanger
+from lifx_changer import LifxLightChanger
 
 
 class WSServer:
@@ -55,7 +55,7 @@ class WSServer:
             self.lifx.set_gradient_value(gradient_percentage, safe=False)
         elif command == 'set_color_zones':
             zones_values = message['zones_values']
-            await self.log(f'Setting color zones values')
+            await self.log(f'Setting color zones values {zones_values}')
             self.lifx.set_color_zones(zones_values, safe=False)
 
     async def handler(self, websocket, path):

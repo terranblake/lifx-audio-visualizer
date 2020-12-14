@@ -4,6 +4,7 @@ import json
 import lifxlan
 from time import sleep
 import numpy as np
+import sys
 import websockets
 import pyaudio
 from visualizer import MicrophoneVisualizer
@@ -23,6 +24,7 @@ class WSClient:
             'zone': self.mode_zone
         }
         self.visualizer = MicrophoneVisualizer(
+            mode = self.mode,
             window_length = 50,
             num_beams = 8,
             num_zones_per_beam = 10,
@@ -47,7 +49,6 @@ class WSClient:
         stream = p.open(format=self.format, channels=self.channels, rate=self.rate,
                         frames_per_buffer=self.chunk_size, input=True)
         print('Audio stream opened')
-        last_color = None
         while True:
             try:
                 await self.mode_functions[self.mode](stream)
@@ -66,20 +67,18 @@ class WSClient:
     # ===========================================
 
     async def mode_static(self, stream: pyaudio.Stream):
-        last_color = None
         while True:
             data = np.frombuffer(stream.read(self.chunk_size), dtype=np.int16)
-            peak = np.average(np.abs(data)) * 2
-            bars = int(50 * peak / 2 ** 16)
+            self.visualizer.on_data(data)
+            zones_values = self.visualizer.get_color_mapping(self.mode)
+            if type(zones_values) == np.ndarray:
+                zones_values = zones_values.tolist()
 
-            command = {'command': 'change_color'}
-            if bars > 0:
-                command['color'] = lifxlan.BLUE
-            else:
-                command['color'] = lifxlan.RED
-            if command['color'] != last_color:
-                await self.websocket.send(json.dumps(command))
-                last_color = command['color']
+            command = {
+                'command': 'set_color_zones',
+                'zones_values': zones_values
+            }
+            await self.websocket.send(json.dumps(command))
 
     async def mode_gradient(self, stream: pyaudio.Stream):
         # Set gradient colors
@@ -123,5 +122,6 @@ class WSClient:
 
 
 if __name__ == '__main__':
-    ws_client = WSClient(mode = 'zone')
+    visualizer_mode = sys.argv[1]
+    ws_client = WSClient(mode=visualizer_mode)
     ws_client.start()

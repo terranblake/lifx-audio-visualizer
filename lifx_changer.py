@@ -96,12 +96,19 @@ class LifxLightChanger:
 
     def set_color_zones(self, zones_values: list, safe=False):
         # gradient_value should be a value from 0 to 1
-        off = [0, 0, 0, 0]
         for device in self.devices:
-            color_zones = []
-            for x in zones_values:
-                if x == 0:
-                    color_zones.append(off)
+            for x in range(len(zones_values)):
+                color = zones_values[x]
+                # only set the zone color if it has changed
+                if color is None:
+                    continue
+                elif type(color) == bool:
+                    # convert from bool to selected color
+                    if not color:
+                        color = lifxlan.utils.RGBtoHSBK((0, 0, 0), 0)
+                    else:
+                        color = lifxlan.utils.RGBtoHSBK((255, 255, 255), 3500)
                 else:
-                    color_zones.append(lifxlan.RED)
-            device.set_zone_colors(color_zones, rapid=not safe)
+                    color = lifxlan.utils.RGBtoHSBK(color, 3500)
+                
+                device.set_zone_color(x, x, color, rapid=not safe)
