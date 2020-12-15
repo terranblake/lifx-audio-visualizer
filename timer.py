@@ -27,8 +27,8 @@ class Timer:
         interval = ms / ops
 
         time_to_next_op = self.last_time + interval - new_time
-        print(f'{time_to_next_op} ms until next op')
-        print(f'{new_time - self.last_time} ms since last op')
+        # print(f'{time_to_next_op} ms until next op')
+        # print(f'{new_time - self.last_time} ms since last op')
 
         return time_to_next_op >= 0
         

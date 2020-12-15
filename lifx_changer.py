@@ -110,7 +110,7 @@ class LifxLightChanger:
 
         for device in self.devices:
             # does this device need to be rate-limited?
-            if self.device_timers[device].is_limited(ops=20, ms=3000):
+            if self.device_timers[device].is_limited(ops=20, ms=1000):
                 continue
 
             for x in range(len(zones_values)):
@@ -122,4 +122,8 @@ class LifxLightChanger:
                 
                 self.device_timers[device].step()
                 self.device_color_mapping[device][x] = new_color
-                device.set_zone_color(x, x, new_color, rapid=not safe)
+
+                try:
+                    device.set_zone_color(x, x, new_color, rapid=not safe)
+                except lifxlan.WorkflowException:
+                    continue

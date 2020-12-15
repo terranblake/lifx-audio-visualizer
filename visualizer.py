@@ -2,9 +2,18 @@ import numpy as np
 import colorsys
 import subprocess
 from lifxlan.utils import RGBtoHSBK
+import random
+
+import struct
+import numpy as np
+from scipy.fftpack import rfft
+import matplotlib.pyplot as plt
 
 
 class MicrophoneVisualizer():
+
+    current_color = 'RED'
+    background_color = 'RED'
 
     window_average = 0
     window = []
@@ -24,8 +33,31 @@ class MicrophoneVisualizer():
             'gradient': self.__get_gradient_color_mapping,
             'palette': self.__get_palette_color_mapping,
         }
+        self.sampling_rate = kwargs.get('sampling_rate')
+        self.chunk_size = kwargs.get('chunk_size')
+        self.channels = kwargs.get('channels')
         self.mode = kwargs.get('mode', 'static')
         self.window_length = kwargs.get('window_length', 50)
+        self.colors = {
+            'RED': [65535, 65535, 65535, 9000],
+            'ORANGE': [6500, 65535, 65535, 9000],
+            'YELLOW': [9000, 65535, 65535, 9000],
+            'GREEN': [16173, 65535, 65535, 9000],
+            'CYAN': RGBtoHSBK((0, 255, 255), 9000),
+            'BLUE': [43634, 65535, 65535, 9000],
+            'PURPLE': [50486, 65535, 65535, 9000],
+            'PINK': [58275, 65535, 47142, 9000],
+            # light white poop color
+            # 'WHITE': [58275, 0, 65535, 9000],
+            # light white poop color
+            # 'COLD_WHITE': [58275, 0, 65535, 9000],
+            # 'GOLD': [58275, 0, 65535, 9000],
+            'MAGENTA': RGBtoHSBK((255, 0, 255), 9000)
+        }
+
+        self.color_transition_interval = kwargs.get('color_transition_interval', 50)
+        self.color_transition_count = 0
+        self.background_color_percent = 0.07
 
         self.volume_smoothing = kwargs.get('volume_smoothing', 5)
 
@@ -40,9 +72,12 @@ class MicrophoneVisualizer():
             (self.num_beams * self.num_zones_per_beam) / 2)
 
     def on_data(self, data=None):
+        subprocess.call('clear')
         if data is None:
             print('no data received when calling on_data')
             return
+
+        self.__get_frequency_data(data)
 
         self.chunk_average = np.average(np.abs(data))
         chunk_average_peak = self.chunk_average * 2
@@ -65,8 +100,24 @@ class MicrophoneVisualizer():
         if self.beam_volume > 1:
             self.beam_volume = 1
 
-    def get_color_mapping(self):
         self.current_zones = self.mapping_functions[self.mode]()
+
+    def __get_frequency_data(self, data):
+        unpacked_data = struct.unpack(str(self.chunk_size * self.channels) + 'h', data)
+        rfft_data = rfft(unpacked_data)
+
+        # n = rfft_data.size // 32    # 32 frequency bands
+        # bands = [sum(rfft_data[i:(i + n)]) for i in range(0, rfft_data.size, n)]
+        abs_fourier_transform = np.abs(rfft_data)
+
+        power_spectrum = np.square(abs_fourier_transform)
+
+        frequency = np.linspace(0, self.sampling_rate/2, len(power_spectrum))
+
+        print(f'frq {len(frequency)} {frequency}')
+        print(f'pwr {len(power_spectrum)} {power_spectrum}')
+
+    def get_color_mapping(self):
         return self.current_zones
 
     def __get_static_color_mapping(self):
@@ -75,8 +126,18 @@ class MicrophoneVisualizer():
         num_left_unlit = self.center_zone_offset - num_left_lit
         num_right_unlit = (self.num_addressable_zones - self.center_zone_offset) - num_right_lit
 
-        unlit_color = RGBtoHSBK((0, 0, 0), 0)
-        lit_color = RGBtoHSBK((127, 0, 127), 500)
+        # this whole color transition thing is garbage and is just for experimenting
+
+        if self.color_transition_count >= self.color_transition_interval:
+            self.color_transition_count = 0
+
+            self.current_color = random.choice(list(self.colors.keys()))
+            self.background_color = random.choice(list(self.colors.keys()))
+
+        # self.color_transition_count += 1
+        
+        unlit_color = [x * self.background_color_percent for x in self.colors[self.background_color]]
+        lit_color = self.colors[self.current_color]
 
         left_unlit = [unlit_color] * num_left_unlit
         left_lit = [lit_color] * num_left_lit
@@ -84,12 +145,13 @@ class MicrophoneVisualizer():
         right_unlit = [unlit_color] * num_right_unlit
 
         mapping = left_unlit + left_lit + right_lit + right_unlit
-        device_display = ''.join([' ' if x[-1] == 0 else '*' for x in mapping])
+        device_display = ''.join([' ' if x[-1] != lit_color[-1] else '*' for x in mapping])
 
-        subprocess.call('clear')
-        print(f'[{device_display}]')
-        print(("-" * self.audio_volume) + "|")
-        print((" " * self.average_volume) + "|")
+        print(f'dis [{device_display}]')
+        print("vol " + ("-" * self.audio_volume) + "|")
+        print("avg " + (" " * self.average_volume) + "|")
+        print(f'color {self.current_color} {lit_color}')
+        print(f'bcolor {self.background_color} {unlit_color}')
 
         return mapping
 

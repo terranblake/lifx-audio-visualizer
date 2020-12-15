@@ -27,7 +27,7 @@ class WSServer:
 
         # Set IP to 0.0.0.0 if you want clients from separate devices to be able to connect
         print(f'Listening at {ip}:{port}')
-        self.server = websockets.serve(self.handler, ip, port)
+        self.server = websockets.serve(self.handler, ip, port, ping_interval=None, ping_timeout=None)
         asyncio.get_event_loop().run_until_complete(self.server)
         asyncio.get_event_loop().run_forever()
 
@@ -57,7 +57,7 @@ class WSServer:
             if zones_values == None:
                 return
 
-            await self.log(f'Setting color zones values')
+            # await self.log(f'Setting color zones values')
             self.lifx.set_color_zones(zones_values, safe=safe)
 
     async def handler(self, websocket, path):

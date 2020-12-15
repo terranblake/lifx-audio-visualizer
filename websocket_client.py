@@ -27,18 +27,22 @@ class WSClient:
         self.visualizer = MicrophoneVisualizer(
             mode = self.mode,
             volume_smoothing = 10,
-            window_length = 2000,
+            window_length = 200,
             num_beams = 6,
             num_zones_per_beam = 10,
             num_corner_pieces = 1,
-            center_zone_offset = 0,
+            center_zone_offset = 5,
+            color_transition_interval = 300,
+            chunk_size = self.chunk_size,
+            channels = self.channels,
+            sampling_rate = self.rate
         )
 
     def start(self):
         asyncio.get_event_loop().run_until_complete(self.connect_and_run())
 
     async def establish_connection_to_server(self, ip='127.0.0.1', port=8080):
-        self.websocket = await websockets.connect(f'ws://{ip}:{port}', ping_interval=None)
+        self.websocket = await websockets.connect(f'ws://{ip}:{port}', ping_interval=None, ping_timeout=None)
 
     async def connect_and_run(self, ip='127.0.0.1', port=8080):
         websocket_url = f'ws://{ip}:{port}'
