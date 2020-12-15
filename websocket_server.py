@@ -12,12 +12,9 @@ class WSServer:
     def __init__(self, verbose=True):
         self.server = None
         self.lifx = LifxLightChanger(1)
-
         self.clients = []
         self.client_message_counts = defaultdict(int)
-
         self.current_color = None
-
         self.verbose = verbose
 
     async def log(self, msg: str):
@@ -36,6 +33,8 @@ class WSServer:
 
     async def handle_message(self, message: str) -> Union[None, Dict]:
         message = json.loads(message)
+        safe = True if int(message['safe']) == 1 else 0
+
         command = message['command']
         if command == 'change_color':
             color = message['color']
@@ -52,11 +51,14 @@ class WSServer:
         elif command == 'set_gradient_levels':
             gradient_percentage = message['gradient']
             await self.log(f'Setting gradient level to {gradient_percentage}')
-            self.lifx.set_gradient_value(gradient_percentage, safe=False)
+            self.lifx.set_gradient_value(gradient_percentage, safe=safe)
         elif command == 'set_color_zones':
             zones_values = message['zones_values']
-            await self.log(f'Setting color zones values {zones_values}')
-            self.lifx.set_color_zones(zones_values, safe=False)
+            if zones_values == None:
+                return
+
+            await self.log(f'Setting color zones values')
+            self.lifx.set_color_zones(zones_values, safe=safe)
 
     async def handler(self, websocket, path):
         await self.log(f'Received connection')

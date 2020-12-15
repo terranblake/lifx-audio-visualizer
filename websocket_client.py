@@ -11,13 +11,14 @@ from visualizer import MicrophoneVisualizer
 
 
 class WSClient:
-    def __init__(self, mode: str = 'static'):
+    def __init__(self, mode: str = 'static', safe: int = 0):
         self.format = pyaudio.paInt16
         self.channels = 1
         self.rate = 48000
-        self.chunk_size = 4096
+        self.chunk_size = 1024
         self.websocket = None
         self.mode = mode
+        self.safe = safe
         self.mode_functions = {
             'static': self.mode_static,
             'gradient': self.mode_gradient,
@@ -25,11 +26,12 @@ class WSClient:
         }
         self.visualizer = MicrophoneVisualizer(
             mode = self.mode,
-            window_length = 50,
-            num_beams = 8,
+            volume_smoothing = 10,
+            window_length = 2000,
+            num_beams = 6,
             num_zones_per_beam = 10,
             num_corner_pieces = 1,
-            center_zone_offset = 50,
+            center_zone_offset = 0,
         )
 
     def start(self):
@@ -70,11 +72,10 @@ class WSClient:
         while True:
             data = np.frombuffer(stream.read(self.chunk_size), dtype=np.int16)
             self.visualizer.on_data(data)
-            zones_values = self.visualizer.get_color_mapping(self.mode)
-            if type(zones_values) == np.ndarray:
-                zones_values = zones_values.tolist()
+            zones_values = self.visualizer.get_color_mapping()
 
             command = {
+                'safe': self.safe,
                 'command': 'set_color_zones',
                 'zones_values': zones_values
             }
@@ -123,5 +124,7 @@ class WSClient:
 
 if __name__ == '__main__':
     visualizer_mode = sys.argv[1]
-    ws_client = WSClient(mode=visualizer_mode)
+    safe = int(sys.argv[2])
+
+    ws_client = WSClient(mode=visualizer_mode, safe=safe)
     ws_client.start()

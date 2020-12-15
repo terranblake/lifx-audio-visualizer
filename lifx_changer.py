@@ -1,6 +1,11 @@
 
 from typing import Dict, List, Tuple
 import lifxlan
+import subprocess
+
+import time
+import datetime as dt
+from timer import Timer
 
 
 class LifxLightChanger:
@@ -10,10 +15,12 @@ class LifxLightChanger:
         self.verbose = verbose
         self.devices: List[lifxlan.MultiZoneLight] = []
         self.device_color_zone_counts: Dict[lifxlan.MultiZoneLight, int] = {}
+        self.device_color_mapping: Dict[str, list] = {}
 
         # Messing with gradients based on moving average of volume
         self.current_gradient_colors = []
         self.current_gradient_value = 0
+        self.device_timers: Dict[lifxlan.MultiZoneLight, Timer] = {}
 
     def log(self, msg: str):
         if self.verbose:
@@ -42,7 +49,11 @@ class LifxLightChanger:
         # Get count of color zones
         self.log('Getting color zones')
         for device in self.devices:
-            self.device_color_zone_counts[device] = len(self.get_color_zones(device, safe=True))
+            color_zones = self.get_color_zones(device, safe=True)
+            self.device_color_zone_counts[device] = len(color_zones)
+            self.device_color_mapping[device] = color_zones
+            self.device_timers[device] = Timer(name=device.label)
+            self.change_color(color=lifxlan.utils.RGBtoHSBK((0, 0, 0), 0))
 
     @staticmethod
     def get_color_zones(device: lifxlan.MultiZoneLight, start=None, end=None, safe=True):
@@ -96,19 +107,19 @@ class LifxLightChanger:
 
     def set_color_zones(self, zones_values: list, safe=False):
         # gradient_value should be a value from 0 to 1
+
         for device in self.devices:
+            # does this device need to be rate-limited?
+            if self.device_timers[device].is_limited(ops=20, ms=3000):
+                continue
+
             for x in range(len(zones_values)):
-                color = zones_values[x]
-                # only set the zone color if it has changed
-                if color is None:
+                previous_color = self.device_color_mapping[device][x]
+                new_color = zones_values[x]
+
+                if previous_color == new_color:
                     continue
-                elif type(color) == bool:
-                    # convert from bool to selected color
-                    if not color:
-                        color = lifxlan.utils.RGBtoHSBK((0, 0, 0), 0)
-                    else:
-                        color = lifxlan.utils.RGBtoHSBK((255, 255, 255), 3500)
-                else:
-                    color = lifxlan.utils.RGBtoHSBK(color, 3500)
                 
-                device.set_zone_color(x, x, color, rapid=not safe)
+                self.device_timers[device].step()
+                self.device_color_mapping[device][x] = new_color
+                device.set_zone_color(x, x, new_color, rapid=not safe)
