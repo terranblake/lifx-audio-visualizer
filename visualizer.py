@@ -3,11 +3,12 @@ import colorsys
 import subprocess
 from lifxlan.utils import RGBtoHSBK
 import random
-
+import json
 import struct
 import numpy as np
 from scipy.fftpack import rfft
-import matplotlib.pyplot as plt
+# import pylab as plb
+# import matplotlib.pyplot as plt
 
 
 class MicrophoneVisualizer():
@@ -105,17 +106,24 @@ class MicrophoneVisualizer():
     def __get_frequency_data(self, data):
         unpacked_data = struct.unpack(str(self.chunk_size * self.channels) + 'h', data)
         rfft_data = rfft(unpacked_data)
-
-        # n = rfft_data.size // 32    # 32 frequency bands
-        # bands = [sum(rfft_data[i:(i + n)]) for i in range(0, rfft_data.size, n)]
         abs_fourier_transform = np.abs(rfft_data)
-
         power_spectrum = np.square(abs_fourier_transform)
-
         frequency = np.linspace(0, self.sampling_rate/2, len(power_spectrum))
 
         print(f'frq {len(frequency)} {frequency}')
         print(f'pwr {len(power_spectrum)} {power_spectrum}')
+
+        # plt.plot(frequency, power_spectrum)
+
+        # bands = {
+        #     'frequency': frequency.tolist(),
+        #     'power': power_spectrum.tolist()
+        # }
+
+        # with open('bands.json', 'w') as outfile:
+        #     json.dump(bands, outfile)
+
+        # plt.plot(frequency, power_spectrum)
 
     def get_color_mapping(self):
         return self.current_zones
