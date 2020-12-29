@@ -7,14 +7,33 @@ import json
 import struct
 import numpy as np
 from scipy.fftpack import rfft
-# import pylab as plb
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+# import librosa.display
 
 
 class MicrophoneVisualizer():
+    colors = {
+        'RED': [65535, 65535, 65535, 5000],
+        'ORANGE': [6500, 65535, 65535, 9000],
+        'YELLOW': [9000, 65535, 65535, 5000],
+        'GREEN': [16173, 65535, 65535, 9000],
+        'CYAN': RGBtoHSBK((0, 255, 255), 5000),
+        'BLUE': [43634, 65535, 65535, 9000],
+        'PURPLE': [50486, 65535, 65535, 5000],
+        'PINK': [58275, 65535, 47142, 9000],
+        # light white poop color
+        # 'WHITE': [58275, 0, 65535, 9000],
+        # light white poop color
+        # 'COLD_WHITE': [58275, 0, 65535, 9000],
+        # 'GOLD': [58275, 0, 65535, 9000],
+        'MAGENTA': RGBtoHSBK((255, 0, 255), 5000)
+    }
 
-    current_color = 'RED'
-    background_color = 'RED'
+    # pairs:
+    # purple, green
+    # red, blue
+    # green, cyan
+    # magenta, cyan
 
     window_average = 0
     window = []
@@ -39,26 +58,14 @@ class MicrophoneVisualizer():
         self.channels = kwargs.get('channels')
         self.mode = kwargs.get('mode', 'static')
         self.window_length = kwargs.get('window_length', 50)
-        self.colors = {
-            'RED': [65535, 65535, 65535, 9000],
-            'ORANGE': [6500, 65535, 65535, 9000],
-            'YELLOW': [9000, 65535, 65535, 9000],
-            'GREEN': [16173, 65535, 65535, 9000],
-            'CYAN': RGBtoHSBK((0, 255, 255), 9000),
-            'BLUE': [43634, 65535, 65535, 9000],
-            'PURPLE': [50486, 65535, 65535, 9000],
-            'PINK': [58275, 65535, 47142, 9000],
-            # light white poop color
-            # 'WHITE': [58275, 0, 65535, 9000],
-            # light white poop color
-            # 'COLD_WHITE': [58275, 0, 65535, 9000],
-            # 'GOLD': [58275, 0, 65535, 9000],
-            'MAGENTA': RGBtoHSBK((255, 0, 255), 9000)
-        }
+
+        self.current_color = random.choice(list(self.colors.keys()))
+        self.background_color = random.choice(list(self.colors.keys()))
 
         self.color_transition_interval = kwargs.get('color_transition_interval', 50)
         self.color_transition_count = 0
-        self.background_color_percent = 0.07
+        self.primary_color_percent = kwargs.get('primary_color_percent', 0.07)
+        self.background_color_percent = kwargs.get('background_color_percent', 0.07)
 
         self.volume_smoothing = kwargs.get('volume_smoothing', 5)
 
@@ -78,7 +85,14 @@ class MicrophoneVisualizer():
             print('no data received when calling on_data')
             return
 
-        self.__get_frequency_data(data)
+        # print(f'stream type: {type(data)}')
+        # librosa.feature.mfcc(data)
+
+        # onset_env = librosa.onset.onset_strength(data, sr=self.sampling_rate)
+        # tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=self.sampling_rate)
+        # print(f'tempo {tempo}')
+
+        # self.__get_frequency_data(data)
 
         self.chunk_average = np.average(np.abs(data))
         chunk_average_peak = self.chunk_average * 2
@@ -110,8 +124,8 @@ class MicrophoneVisualizer():
         power_spectrum = np.square(abs_fourier_transform)
         frequency = np.linspace(0, self.sampling_rate/2, len(power_spectrum))
 
-        print(f'frq {len(frequency)} {frequency}')
-        print(f'pwr {len(power_spectrum)} {power_spectrum}')
+        # print(f'frq {len(frequency)} {frequency}')
+        # print(f'pwr {len(power_spectrum)} {power_spectrum}')
 
         # plt.plot(frequency, power_spectrum)
 
@@ -142,10 +156,14 @@ class MicrophoneVisualizer():
             self.current_color = random.choice(list(self.colors.keys()))
             self.background_color = random.choice(list(self.colors.keys()))
 
-        # self.color_transition_count += 1
+        self.color_transition_count += 1
         
-        unlit_color = [x * self.background_color_percent for x in self.colors[self.background_color]]
-        lit_color = self.colors[self.current_color]
+        # unlit_color = [x for x in self.colors[self.background_color]]
+        unlit_color = list(self.colors[self.background_color])
+        unlit_color[len(unlit_color) - 1] = unlit_color[len(unlit_color) - 1] * int(self.beam_volume)
+
+        lit_color = list(self.colors[self.current_color])
+        lit_color[len(lit_color) - 1] = lit_color[len(lit_color) - 1] * int(self.beam_volume)
 
         left_unlit = [unlit_color] * num_left_unlit
         left_lit = [lit_color] * num_left_lit

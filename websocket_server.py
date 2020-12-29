@@ -11,7 +11,7 @@ from lifx_changer import LifxLightChanger
 class WSServer:
     def __init__(self, verbose=True):
         self.server = None
-        self.lifx = LifxLightChanger(1)
+        self.lifx = LifxLightChanger(2)
         self.clients = []
         self.client_message_counts = defaultdict(int)
         self.current_color = None

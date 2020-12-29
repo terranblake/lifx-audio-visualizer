@@ -9,8 +9,7 @@ from timer import Timer
 
 
 class LifxLightChanger:
-    def __init__(self, expected_number_of_lights: int = None, verbose=True):
-        self.expected_number_of_lights = expected_number_of_lights
+    def __init__(self, verbose=True):
         self.lifx = lifxlan.LifxLAN()
         self.verbose = verbose
         self.devices: List[lifxlan.MultiZoneLight] = []
@@ -124,6 +123,7 @@ class LifxLightChanger:
                 self.device_color_mapping[device][x] = new_color
 
                 try:
-                    device.set_zone_color(x, x, new_color, rapid=not safe)
-                except lifxlan.WorkflowException:
+                    device.set_zone_color(x, x + 1, new_color, rapid=not safe, apply=1)
+                except lifxlan.WorkflowException as e:
+                    print(e)
                     continue
