@@ -4,6 +4,7 @@ import subprocess
 from lifxlan.utils import RGBtoHSBK
 import random
 import json
+import datetime
 import struct
 import numpy as np
 from scipy.fftpack import rfft
@@ -12,6 +13,13 @@ import matplotlib.pyplot as plt
 
 
 class MicrophoneVisualizer():
+    # raw frequency data from the mic
+    frequency_data = {}
+
+    # historic frequency power levels
+    frequency_window_length = 10
+    frequency_window = {}
+
     colors = {
         'RED': [65535, 65535, 65535, 5000],
         'ORANGE': [6500, 65535, 65535, 9000],
@@ -80,7 +88,7 @@ class MicrophoneVisualizer():
             (self.num_beams * self.num_zones_per_beam) / 2)
 
     def on_data(self, data=None):
-        subprocess.call('clear')
+        # subprocess.call('clear')
         if data is None:
             print('no data received when calling on_data')
             return
@@ -92,7 +100,7 @@ class MicrophoneVisualizer():
         # tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=self.sampling_rate)
         # print(f'tempo {tempo}')
 
-        # self.__get_frequency_data(data)
+        self.__update_frequency_data(data)
 
         self.chunk_average = np.average(np.abs(data))
         chunk_average_peak = self.chunk_average * 2
@@ -117,22 +125,31 @@ class MicrophoneVisualizer():
 
         self.current_zones = self.mapping_functions[self.mode]()
 
-    def __get_frequency_data(self, data):
+    def __update_frequency_data(self, data):
         unpacked_data = struct.unpack(str(self.chunk_size * self.channels) + 'h', data)
         rfft_data = rfft(unpacked_data)
         abs_fourier_transform = np.abs(rfft_data)
         power_spectrum = np.square(abs_fourier_transform)
         frequency = np.linspace(0, self.sampling_rate/2, len(power_spectrum))
 
-        # print(f'frq {len(frequency)} {frequency}')
-        # print(f'pwr {len(power_spectrum)} {power_spectrum}')
+        # add current power level of each frequency to a window for averaging the power spectrum
+        # averaged_powers = []
+        # for i in range(len(frequency)):
+        #     if frequency[i] not in self.frequency_window:
+        #         self.frequency_window[frequency[i]] = [power_spectrum[i]]
+        #     elif len(self.frequency_window) == self.frequency_window_length:
+        #             self.frequency_window[frequency[i]].pop(self.frequency_window_length - 1)
+        #     averaged_powers.append(sum(self.frequency_window[frequency[i]]) / len(self.frequency_window[frequency[i]]))
+            
 
-        # plt.plot(frequency, power_spectrum)
+        self.window.insert(0, self.peak)
 
-        # bands = {
-        #     'frequency': frequency.tolist(),
-        #     'power': power_spectrum.tolist()
-        # }
+        # used by websocket_dashboard to send frequency data to the client
+        self.frequency_data = {
+            'time': datetime.datetime.today().timestamp(),
+            'frequency': frequency.tolist(),
+            'power': power_spectrum.tolist()
+        }
 
         # with open('bands.json', 'w') as outfile:
         #     json.dump(bands, outfile)
@@ -173,11 +190,11 @@ class MicrophoneVisualizer():
         mapping = left_unlit + left_lit + right_lit + right_unlit
         device_display = ''.join([' ' if x[-1] != lit_color[-1] else '*' for x in mapping])
 
-        print(f'dis [{device_display}]')
-        print("vol " + ("-" * self.audio_volume) + "|")
-        print("avg " + (" " * self.average_volume) + "|")
-        print(f'color {self.current_color} {lit_color}')
-        print(f'bcolor {self.background_color} {unlit_color}')
+        # print(f'dis [{device_display}]')
+        # print("vol " + ("-" * self.audio_volume) + "|")
+        # print("avg " + (" " * self.average_volume) + "|")
+        # print(f'color {self.current_color} {lit_color}')
+        # print(f'bcolor {self.background_color} {unlit_color}')
 
         return mapping
 

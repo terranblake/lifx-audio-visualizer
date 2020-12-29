@@ -3,10 +3,8 @@ import moment from 'moment';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend
 } from 'recharts';
-import ToggleButton from '@material-ui/lab/ToggleButton';
-import ToggleButtonGroup from '@material-ui/lab/ToggleButtonGroup';
 
-import { getSocket } from '../utils/socketio';
+import { getSocket, ENDPOINT } from '../utils/socketio';
 
 
 // replace the chart with this zoomable one from recharts
@@ -19,8 +17,10 @@ export default class PowerFrequencyPanel extends PureComponent {
             data: [],
             formattedData: [],
             subscription: {
-                command: 'frequency',
+                command: 'microphone',
                 arguments: {
+                    x: 'frequency',
+                    y: 'power'
                 }
             },
         };
@@ -29,7 +29,6 @@ export default class PowerFrequencyPanel extends PureComponent {
         this.onClose = this.onClose.bind(this);
         this.onMessage = this.onMessage.bind(this);
         this.getChartLines = this.getChartLines.bind(this);
-        this.getFormattedData = this.getFormattedData.bind(this);
     }
 
     componentDidMount() {
@@ -46,44 +45,33 @@ export default class PowerFrequencyPanel extends PureComponent {
 
     onMessage(event) {
         const data = JSON.parse(event.data);
-        console.log('socket received data', data);
+        // console.log('socket received data', data);
 
-        this.setState({ data }, this.getFormattedData());
+        let formattedData = [];
+        for (let i = 0; i < data.data.frequency.length; i++) {
+            formattedData.push({
+                frequency: data.data.frequency[i],
+                power: data.data.power[i]
+            });
+        }
+
+        this.setState({
+            time: data.data.time,
+            data: formattedData
+        });
     }
 
     onClose(event) {
         console.log('socket closed', event);
     }
 
-    getFormattedData() {
-        // const historyByDate = this.state.data.reduce((acc, curr) => {
-        //     // this.state.fields.forEach(f => {
-        //     if ('symbol' in curr)
-        //         acc[curr['date']] = {
-        //             [`${this.state.selectedField}_${curr['symbol'].toLowerCase()}`]: curr[this.state.selectedField],
-        //             ...acc[curr['date']]
-        //         };
-        //     // });
-
-        //     return acc;
-        // }, {});
-
-        // const formattedData = Object.keys(historyByDate).map(k => {
-        //     return { date: k, ...historyByDate[k] };
-        // });
-        const formattedData = this.state.data;
-
-        console.log({ formattedData });
-        this.setState({ formattedData });
-    }
-
     getChartLines() {
         return <Line
             type="monotone"
-            name='amplitude'
+            name='power'
             dot={false}
-            dataKey="amplitude"
-            key='amplitude'
+            dataKey="power"
+            key='power'
         />;
     }
 
@@ -92,19 +80,23 @@ export default class PowerFrequencyPanel extends PureComponent {
             <div>
                 {
                     !this.state.data.length
-                        ? <div>no data found</div>
+                        ? <div>No data found at {ENDPOINT}...</div>
                         :
                         <div style={{ textAlign: 'center' }}>
+                            <div className="input-field">
+                                <input type="text" name="name" ref="name" value={moment.unix(this.state.time).format("MM/DD/YYYY HH:mm:ss") || ''} />
+                                <label htmlFor="name">Name</label>
+                            </div>
                             <LineChart
                                 width={600}
                                 height={350}
-                                data={this.state.formattedData}
+                                data={this.state.data}
                                 margin={{
                                     top: 0, right: 0, left: 0, bottom: 0,
                                 }}
                             >
                                 <CartesianGrid strokeDasharray="1 1" />
-                                <XAxis dataKey="power" />
+                                <XAxis dataKey="frequency" />
                                 <YAxis />
                                 <Tooltip />
                                 <Legend />

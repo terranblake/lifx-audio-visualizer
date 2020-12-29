@@ -6,5 +6,6 @@ const getSocket = () => {
 }
 
 export {
+    ENDPOINT,
     getSocket,
 }

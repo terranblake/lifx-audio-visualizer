@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Dict, Union
 import asyncio
 import websockets
+from concurrent.futures import ProcessPoolExecutor
 
 from lifx_changer import LifxLightChanger
 
@@ -16,6 +17,19 @@ class WSServer:
         self.client_message_counts = defaultdict(int)
         self.current_color = None
         self.verbose = verbose
+        self.loop = asyncio.get_event_loop()
+
+    async def setup_event_loop(self):
+        tasks = [
+            # asyncio.create_task(self.broadcast()),
+            asyncio.create_task(self.serve())
+        ]
+
+        await asyncio.wait(tasks)
+
+    async def serve(self, ip: str = '127.0.0.1', port: str = '8080'):                                                                                           
+        server = await websockets.serve(self.handler, ip, port, ping_interval=None, ping_timeout=None)
+        await server.wait_closed()
 
     async def log(self, msg: str):
         if self.verbose:
@@ -27,9 +41,11 @@ class WSServer:
 
         # Set IP to 0.0.0.0 if you want clients from separate devices to be able to connect
         print(f'Listening at {ip}:{port}')
-        self.server = websockets.serve(self.handler, ip, port, ping_interval=None, ping_timeout=None)
-        asyncio.get_event_loop().run_until_complete(self.server)
-        asyncio.get_event_loop().run_forever()
+        # asyncio.get_event_loop().create_task(self.broadcast)
+        # asyncio.get_event_loop().run_until_complete(self.server)
+        self.loop.run_until_complete(self.setup_event_loop())
+        self.loop.run_forever()
+
 
     async def handle_message(self, message: str) -> Union[None, Dict]:
         message = json.loads(message)
@@ -44,14 +60,6 @@ class WSServer:
                 await self.log(f'Changing color to {color}')
                 self.current_color = color
                 self.lifx.change_color(color)
-        elif command == 'set_gradient_colors':
-            colors = message['colors']
-            await self.log(f'Set gradient colors to {colors}')
-            self.lifx.set_gradient_colors(colors)
-        elif command == 'set_gradient_levels':
-            gradient_percentage = message['gradient']
-            await self.log(f'Setting gradient level to {gradient_percentage}')
-            self.lifx.set_gradient_value(gradient_percentage, safe=safe)
         elif command == 'set_color_zones':
             zones_values = message['zones_values']
             if zones_values == None:

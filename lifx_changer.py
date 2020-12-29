@@ -89,21 +89,6 @@ class LifxLightChanger:
                 except lifxlan.WorkflowException:
                     pass
 
-    def set_gradient_colors(self, colors: List[Tuple]):
-        self.current_gradient_colors = colors
-
-    def set_gradient_value(self, gradient_value: float, safe=False):
-        # gradient_value should be a value from 0 to 1
-        for device in self.devices:
-            number_of_color_zones = self.device_color_zone_counts[device]
-            color_zones = []
-            for i in range(number_of_color_zones):
-                if i / number_of_color_zones < gradient_value:
-                    color_zones.append(self.current_gradient_colors[0])
-                else:
-                    color_zones.append(self.current_gradient_colors[1])
-            device.set_zone_colors(color_zones, rapid=not safe)
-
     def set_color_zones(self, zones_values: list, safe=False):
         # gradient_value should be a value from 0 to 1
 
