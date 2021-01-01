@@ -1,5 +1,4 @@
-import HomePagePanel from './panels/homePagePanel';
-
+import HomePagePanel from './panels/HomePagePanel';
 
 
 function App() {

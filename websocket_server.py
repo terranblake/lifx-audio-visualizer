@@ -49,8 +49,6 @@ class WSServer:
 
     async def handle_message(self, message: str) -> Union[None, Dict]:
         message = json.loads(message)
-        safe = True if int(message['safe']) == 1 else 0
-
         command = message['command']
         if command == 'change_color':
             color = message['color']
@@ -66,7 +64,7 @@ class WSServer:
                 return
 
             # await self.log(f'Setting color zones values')
-            self.lifx.set_color_zones(zones_values, safe=safe)
+            self.lifx.set_color_zones(zones_values)
 
     async def handler(self, websocket, path):
         await self.log(f'Received connection')

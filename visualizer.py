@@ -1,47 +1,46 @@
 import numpy as np
 import colorsys
+import json
 import subprocess
 from lifxlan.utils import RGBtoHSBK
 import random
 import json
 import datetime
+import os
 import struct
 import numpy as np
 from scipy.fftpack import rfft
-import matplotlib.pyplot as plt
-# import librosa.display
 
 
 class MicrophoneVisualizer():
-    # raw frequency data from the mic
-    frequency_data = {}
+    unlit_color = None
+    lit_color = None
+    palette = {}
 
     # historic frequency power levels
-    frequency_window_length = 10
-    frequency_window = {}
+    power = []
+    center_zone_update = 1
 
-    colors = {
-        'RED': [65535, 65535, 65535, 5000],
-        'ORANGE': [6500, 65535, 65535, 9000],
-        'YELLOW': [9000, 65535, 65535, 5000],
-        'GREEN': [16173, 65535, 65535, 9000],
-        'CYAN': RGBtoHSBK((0, 255, 255), 5000),
-        'BLUE': [43634, 65535, 65535, 9000],
-        'PURPLE': [50486, 65535, 65535, 5000],
-        'PINK': [58275, 65535, 47142, 9000],
-        # light white poop color
-        # 'WHITE': [58275, 0, 65535, 9000],
-        # light white poop color
-        # 'COLD_WHITE': [58275, 0, 65535, 9000],
-        # 'GOLD': [58275, 0, 65535, 9000],
-        'MAGENTA': RGBtoHSBK((255, 0, 255), 5000)
+    frequency_ranges = [
+        [16, 60, 'sub-bass', 'sb', '#F94144'],
+        [60, 250, 'bass', 'b', '#F3722C'],
+        [250, 500, 'low-mid', 'lm', '#F8961E'],
+        [500, 2000, 'mid', 'm', '#F9C74F'],
+        [2000, 4000, 'high-mid', 'hm', '#90BE6D'],
+        [4000, 6000, 'low-high', 'lh', '#43AA8B'],
+        [6000, 20000, 'high', 'h', '#577590'],
+    ]
+
+    effects = {
+        'NONE': 'effects are disabled',
+        'SCROLL': 'all zones wrap around to the next color; eventually wrapping to other lights',
+        'PINGPONG': 'bounces the current color scheme from the current center to provide a moving effect',
     }
 
-    # pairs:
-    # purple, green
-    # red, blue
-    # green, cyan
-    # magenta, cyan
+    frequency_windows_average = {}
+    frequency_windows = {}
+    frequency_window_length = 0
+    frequency_volumes = {}
 
     window_average = 0
     window = []
@@ -51,11 +50,12 @@ class MicrophoneVisualizer():
 
     audio_volume = 0
     average_volume = 0
-
-    # percent - 0 to 1
     beam_volume = 0
 
     def __init__(self, **kwargs):
+        self.color_palette_name = kwargs.get('color_palette', 'rainbow')
+        self.get_color_palette()
+
         self.mapping_functions = {
             'static': self.__get_static_color_mapping,
             'gradient': self.__get_gradient_color_mapping,
@@ -66,14 +66,18 @@ class MicrophoneVisualizer():
         self.channels = kwargs.get('channels')
         self.mode = kwargs.get('mode', 'static')
         self.window_length = kwargs.get('window_length', 50)
+        self.frequency_window_length = kwargs.get('frequency_window_length', self.window_length)
 
-        self.current_color = random.choice(list(self.colors.keys()))
-        self.background_color = random.choice(list(self.colors.keys()))
+        self.current_color = random.choice(list(self.palette.keys()))
+        self.background_color = random.choice(list(self.palette.keys()))
 
         self.color_transition_interval = kwargs.get('color_transition_interval', 50)
-        self.color_transition_count = 0
+        self.color_transition_count = self.color_transition_interval
+
         self.primary_color_percent = kwargs.get('primary_color_percent', 0.07)
         self.background_color_percent = kwargs.get('background_color_percent', 0.07)
+
+        self.effect = kwargs.get('effect', self.effects['NONE'])
 
         self.volume_smoothing = kwargs.get('volume_smoothing', 5)
 
@@ -85,22 +89,19 @@ class MicrophoneVisualizer():
             self.num_beams * self.num_zones_per_beam) + self.num_corner_pieces
         self.center_zone_offset = kwargs.get(
             'center_zone_offset',
-            (self.num_beams * self.num_zones_per_beam) / 2)
+            (self.num_beams * self.num_zones_per_beam) // 2)
+        self.current_center_offset = self.center_zone_offset
 
     def on_data(self, data=None):
-        # subprocess.call('clear')
+        subprocess.call('clear')
+
         if data is None:
             print('no data received when calling on_data')
             return
 
-        # print(f'stream type: {type(data)}')
-        # librosa.feature.mfcc(data)
-
-        # onset_env = librosa.onset.onset_strength(data, sr=self.sampling_rate)
-        # tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=self.sampling_rate)
-        # print(f'tempo {tempo}')
-
-        self.__update_frequency_data(data)
+        self.update_center_zone()
+        power, _frequency = self.__convert_chunk_to_frequency_data(data)
+        # self.__get_frequency_range_data(power)
 
         self.chunk_average = np.average(np.abs(data))
         chunk_average_peak = self.chunk_average * 2
@@ -125,76 +126,138 @@ class MicrophoneVisualizer():
 
         self.current_zones = self.mapping_functions[self.mode]()
 
-    def __update_frequency_data(self, data):
+    def update_center_zone(self):
+        if self.effect == self.effects['NONE']:
+            return
+
+        # todo: this should be separate from color transition code
+        current_zones = self.current_center_offset
+        max_zones = self.num_addressable_zones
+        
+        if current_zones >= max_zones:
+            if self.effect == self.effects['SCROLL']:
+                self.current_center_offset = -1
+                self.center_zone_update = 1
+            else:
+                self.center_zone_update = -1
+        elif current_zones <= 0:
+            self.center_zone_update = 1
+
+        print(f'current {self.current_center_offset}\nupdate {self.center_zone_update}')
+        self.current_center_offset += self.center_zone_update
+
+    def __get_frequency_range_data(self, power):
+        for range in self.frequency_ranges:
+            if range[2] not in self.frequency_windows:
+                self.frequency_windows[range[2]] = []
+
+            if range[2] not in self.frequency_windows_average:
+                self.frequency_windows_average[range[2]] = 1
+
+            average = sum(power[range[0]:range[1]]) / (range[1] - range[0])
+
+            if len(self.frequency_windows[range[2]]) == self.frequency_window_length:
+                self.frequency_windows[range[2]].pop(self.frequency_window_length - 1)
+
+            self.frequency_windows[range[2]].insert(0, average * 2)
+            self.frequency_windows_average[range[2]] = np.average(self.frequency_windows[range[2]])
+
+            smoothing_values = self.frequency_windows[range[2]][:self.volume_smoothing]
+            smoothing_values.append(average)
+            smoothed_chunk = (sum(smoothing_values) / 2) / len(smoothing_values)
+            print(f'self.frequency_windows_average[range[2]] {range[2]}', self.frequency_windows_average[range[2]])
+            self.frequency_volumes[range[2]] = round(smoothed_chunk / self.frequency_windows_average[range[2]], 2)
+
+            # print(f'{range[2][:2]}\t- vol {self.frequency_volumes[range[2]]}')
+
+            center = self.current_center_offset
+            num_left_lit = int(self.frequency_volumes[range[2]] * center)
+            num_right_lit = int(self.frequency_volumes[range[2]] * (self.num_addressable_zones - center))
+            num_left_unlit = center - num_left_lit
+            num_right_unlit = (self.num_addressable_zones - center) - num_right_lit
+
+            left_unlit = [self.unlit_color] * num_left_unlit
+            left_lit = [self.lit_color] * num_left_lit
+            right_lit = [self.lit_color] * num_right_lit
+            right_unlit = [self.unlit_color] * num_right_unlit
+
+            print(f'{range[2]} {left_unlit} {left_lit} {right_lit} {right_unlit}')
+
+            mapping = left_unlit + left_lit + right_lit + right_unlit
+            device_display = ''.join([' ' if x != self.lit_color else '*' for x in mapping])
+            print(f'{range[2][:2]}\t- vol {device_display}')
+            
+
+    def __convert_chunk_to_frequency_data(self, data):
         unpacked_data = struct.unpack(str(self.chunk_size * self.channels) + 'h', data)
         rfft_data = rfft(unpacked_data)
         abs_fourier_transform = np.abs(rfft_data)
-        power_spectrum = np.square(abs_fourier_transform)
-        frequency = np.linspace(0, self.sampling_rate/2, len(power_spectrum))
-
-        # add current power level of each frequency to a window for averaging the power spectrum
-        # averaged_powers = []
-        # for i in range(len(frequency)):
-        #     if frequency[i] not in self.frequency_window:
-        #         self.frequency_window[frequency[i]] = [power_spectrum[i]]
-        #     elif len(self.frequency_window) == self.frequency_window_length:
-        #             self.frequency_window[frequency[i]].pop(self.frequency_window_length - 1)
-        #     averaged_powers.append(sum(self.frequency_window[frequency[i]]) / len(self.frequency_window[frequency[i]]))
-            
-
+        
+        self.power = np.square(abs_fourier_transform)
+        self.frequency = np.linspace(0, self.sampling_rate / 2, len(self.power))
+        
         self.window.insert(0, self.peak)
+        return self.power, self.frequency
 
-        # used by websocket_dashboard to send frequency data to the client
-        self.frequency_data = {
-            'time': datetime.datetime.today().timestamp(),
-            'frequency': frequency.tolist(),
-            'power': power_spectrum.tolist()
-        }
+    def get_color_palette(self):
+        # colors = {
+        #     'Red Salsa': RGBtoHSBK((249, 65, 68), 9000),
+        #     'BLUE': [43634, 65535, 65535, 9000],
+        # }
+        palette_json = {}
+        with open(f'{os.path.abspath(".")}/palettes/{self.color_palette_name}.json') as f:
+            palette_json = json.load(f)
 
-        # with open('bands.json', 'w') as outfile:
-        #     json.dump(bands, outfile)
-
-        # plt.plot(frequency, power_spectrum)
+        # reset palette
+        self.palette = {}
+        for color in palette_json:
+            self.palette[color['name']] = RGBtoHSBK(color['rgb'], 9000)
+            
+        return self.palette
 
     def get_color_mapping(self):
         return self.current_zones
 
     def __get_static_color_mapping(self):
-        num_left_lit = int(self.beam_volume * self.center_zone_offset)
-        num_right_lit = int(self.beam_volume * (self.num_addressable_zones - self.center_zone_offset))
-        num_left_unlit = self.center_zone_offset - num_left_lit
-        num_right_unlit = (self.num_addressable_zones - self.center_zone_offset) - num_right_lit
+        center = self.current_center_offset
+
+        num_left_lit = int(self.beam_volume * center)
+        num_right_lit = int(self.beam_volume * (self.num_addressable_zones - center))
+        num_left_unlit = center - num_left_lit
+        num_right_unlit = (self.num_addressable_zones - center) - num_right_lit
 
         # this whole color transition thing is garbage and is just for experimenting
 
         if self.color_transition_count >= self.color_transition_interval:
             self.color_transition_count = 0
+            self.current_color = random.choice(list(self.palette.keys()))
+            self.background_color = random.choice(list(self.palette.keys()))
 
-            self.current_color = random.choice(list(self.colors.keys()))
-            self.background_color = random.choice(list(self.colors.keys()))
+            if self.current_color == self.background_color:
+                self.current_color = random.choice(list(self.palette.keys()))
+
+            self.unlit_color = list(self.palette[self.background_color])
+            self.unlit_color[2] = int(self.background_color_percent * self.unlit_color[2])
+
+            self.lit_color = list(self.palette[self.current_color])
+            self.lit_color[2] = int(self.primary_color_percent * self.lit_color[2])
 
         self.color_transition_count += 1
-        
-        # unlit_color = [x for x in self.colors[self.background_color]]
-        unlit_color = list(self.colors[self.background_color])
-        unlit_color[len(unlit_color) - 1] = unlit_color[len(unlit_color) - 1] * int(self.beam_volume)
 
-        lit_color = list(self.colors[self.current_color])
-        lit_color[len(lit_color) - 1] = lit_color[len(lit_color) - 1] * int(self.beam_volume)
-
-        left_unlit = [unlit_color] * num_left_unlit
-        left_lit = [lit_color] * num_left_lit
-        right_lit = [lit_color] * num_right_lit
-        right_unlit = [unlit_color] * num_right_unlit
+        left_unlit = [self.unlit_color] * num_left_unlit
+        left_lit = [self.lit_color] * num_left_lit
+        right_lit = [self.lit_color] * num_right_lit
+        right_unlit = [self.unlit_color] * num_right_unlit
 
         mapping = left_unlit + left_lit + right_lit + right_unlit
-        device_display = ''.join([' ' if x[-1] != lit_color[-1] else '*' for x in mapping])
+        device_display = ''.join([' ' if x != self.lit_color else '*' for x in mapping])
 
-        # print(f'dis [{device_display}]')
-        # print("vol " + ("-" * self.audio_volume) + "|")
-        # print("avg " + (" " * self.average_volume) + "|")
-        # print(f'color {self.current_color} {lit_color}')
-        # print(f'bcolor {self.background_color} {unlit_color}')
+        print(f'dis [{device_display}]')
+        print("vol " + ("-" * self.audio_volume) + "|")
+        print("avg " + (" " * self.average_volume) + "|")
+        print("mid " + (" " * self.current_center_offset) + "|")
+        print(f'color {self.current_color} {self.lit_color}')
+        print(f'bcolor {self.background_color} {self.unlit_color}')
 
         return mapping
 

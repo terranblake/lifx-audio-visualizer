@@ -47,7 +47,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-export default function EventDiscoveryPanel(props) {
+export default function Accordion(props) {
   const classes = useStyles();
 
   return (

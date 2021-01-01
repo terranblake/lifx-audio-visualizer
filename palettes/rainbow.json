@@ -1,0 +1,52 @@
+[
+  {
+    "name": "Red Salsa",
+    "hex": "#f94144",
+    "rgb": [249, 65, 68]
+  },
+  {
+    "name": "Orange Red",
+    "hex": "#f3722c",
+    "rgb": [243, 114, 44]
+  },
+  {
+    "name": "Yellow Orange Color Wheel",
+    "hex": "#f8961e",
+    "rgb": [248, 150, 30]
+  },
+  {
+    "name": "Mango Tango",
+    "hex": "#f9844a",
+    "rgb": [249, 132, 74]
+  },
+  {
+    "name": "Maize Crayola",
+    "hex": "#f9c74f",
+    "rgb": [249, 199, 79]
+  },
+  {
+    "name": "Pistachio",
+    "hex": "#90be6d",
+    "rgb": [144, 190, 109]
+  },
+  {
+    "name": "Zomp",
+    "hex": "#43aa8b",
+    "rgb": [67, 170, 139]
+  },
+  {
+    "name": "Cadet Blue",
+    "hex": "#4d908e",
+    "rgb": [77, 144, 142]
+  },
+  {
+    "name": "Queen Blue",
+    "hex": "#577590",
+    "rgb": [87, 117, 144]
+  },
+  {
+    "name": "CG Blue",
+    "hex": "#277da1",
+    "rgb": [39, 125, 161]
+  }
+]

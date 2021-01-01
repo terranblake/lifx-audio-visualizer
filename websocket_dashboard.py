@@ -15,13 +15,6 @@ class WSDashboard:
         self.verbose = verbose
         self.loop = asyncio.get_event_loop()
 
-    async def setup_event_loop(self):
-        tasks = [
-            # asyncio.create_task(self.broadcast()),
-            asyncio.create_task(self.serve())
-        ]
-        await asyncio.wait(tasks)
-
     async def log(self, msg: str):
         if self.verbose:
             print(f'WSServer: {msg}')
@@ -33,12 +26,12 @@ class WSDashboard:
         self.loop.run_until_complete(self.server)
         self.loop.run_forever()
 
-
     async def handle_message(self, websocket, message: str) -> Union[None, Dict]:
         message = json.loads(message)
         command = message['command']
 
         if command == f'microphone_output' and 'microphone' in self.subscriptions:
+            print('sending message to micrphone output subscription')
             for sub in self.subscriptions['microphone']:
                 await sub.send(json.dumps(message))
         elif command == 'microphone':
